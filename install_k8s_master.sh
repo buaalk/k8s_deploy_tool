@@ -191,6 +191,26 @@ EOT
 install_docker() {
     echo "Installing docker...\n"
     yum install -y ${PACKAGE_DIR}/${DOCKER_RPM_FILE}
+
+    mkdir -p ${DOCKER_CONF_PATH}
+    cat << EOT > ${DOCKER_CONF_PATH}/daemon.json
+{
+    "graph": "${DOCKER_DATA_PATH}",
+    "insecure-registries":["$MASTER_ADVERTISE_IP:$DOCKER_REGISTRY_PORT"]
+}
+EOT
+
+    systemctl enable docker
+    systemctl start docker
+}
+
+install_docker_registry() {
+    docker load < ${PACKAGE_DIR}/${DOCKER_REGISTRY_TAR}
+    docker run -d -p ${DOCKER_REGISTRY_PORT}:${DOCKER_REGISTRY_PORT} --name registry -v ${DOCKER_REGISTRY_DATA_DIR}:/var/lib/registry registry:2
+    # push the pause image to local registry.
+    docker load < ${PACKAGE_DIR}/${PAUSE_IMAGE_TAR}
+    docker tag ${PAUSE_IMAGE_NAME} ${MASTER_ADVERTISE_IP}:${DOCKER_REGISTRY_PORT}/${PAUSE_IMAGE}
+    docker push ${MASTER_ADVERTISE_IP}:${DOCKER_REGISTRY_PORT}/${PAUSE_IMAGE}
 }
 
 set_flannel_ip_range() {
@@ -283,6 +303,7 @@ main() {
     install_etcd
     set_flannel_ip_range
     install_docker
+    install_docker_registry
     create_ssl_cert
     install_apiserver
     install_controller_manager

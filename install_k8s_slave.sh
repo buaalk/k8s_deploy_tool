@@ -14,8 +14,17 @@ prepare_env() {
 install_docker() {
     echo "Installing docker..."
     yum install -y ${PACKAGE_DIR}/${DOCKER_RPM_FILE}
+
+    mkdir -p ${DOCKER_CONF_PATH}
+    cat << EOT > ${DOCKER_CONF_PATH}/daemon.json
+{
+    "graph": "${DOCKER_DATA_PATH}",
+    "insecure-registries":["$MASTER_ADVERTISE_IP:$DOCKER_REGISTRY_PORT"]
+}
+EOT
+
     systemctl enable docker
-    systemctl restart docker
+    systemctl start docker
 }
 
 install_cni() {
@@ -108,7 +117,7 @@ KUBELET_ARGS="--kubeconfig=${K8S_CONF_DIR}/${KUBELET_CONF_FILE} \
 --authorization-mode=Webhook \
 --client-ca-file=${TARGET_CERT_DIR}/${CA_CERT_FILE} \
 --cadvisor-port=0 \
---pod-infra-container-image=${PAUSE_IMAGE} \
+--pod-infra-container-image=${MASTER_ADVERTISE_IP}:${DOCKER_REGISTRY_PORT}/${PAUSE_IMAGE} \
 --cgroup-driver=cgroupfs \
 --feature-gates=Accelerators=true \
 --logtostderr=false \
